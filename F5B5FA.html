@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F5B/5FA - Mapa de Mesas da Formatura</title>
+    <style>
+        /* Estilos base */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+
+        /* Estilos do cabeçalho */
+        header {
+            background-color: #ffffff;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-bottom: 3px solid #ccc;
+        }
+
+        /* Título da turma */
+        header h1 {
+            color: #4a4a4a;
+            font-size: 28px;
+            margin: 0;
+        }
+        
+        /* ALTERAÇÃO: Título da turma para F5B/5FA */
+        header h1::before {
+             content: 'F5B/5FA - ';
+        }
+
+
+        /* Container principal */
+        .container {
+            display: flex;
+            max-width: 1200px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            min-height: calc(100vh - 120px);
+        }
+
+        /* Área de mesas */
+        .mapa-container {
+            flex: 2;
+            padding: 20px 0 0 0;
+            background-color: #dedee9;
+            position: relative;
+        }
+
+        /* Área de lista de mesas */
+        .lista-container {
+            flex: 1;
+            padding: 20px;
+            background-color: #fff;
+            border-left: 1px solid #ccc;
+        }
+        
+        /* Controles de ADM (Inicialmente ocultos) */
+        .admin-controls {
+            display: none; 
+            padding-top: 15px;
+            border-top: 1px solid #ccc;
+            margin-top: 15px;
+        }
+        .admin-mode .admin-controls {
+            display: block; 
+        }
+        .admin-mode .lista-mesas .input-admin {
+            display: flex;
+        }
+
+        /* Indicador de carregamento */
+        #loading-message {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2em;
+            color: #555;
+        }
+
+
+        /* Estilo do palco */
+        .palco {
+            background-color: #f7d63d;
+            width: 80%;
+            height: 80px;
+            margin: 0 auto;
+            text-align: center;
+            line-height: 80px;
+            font-weight: bold;
+            color: #333;
+            font-size: 24px;
+            clip-path: polygon(10% 0, 90% 0, 100% 100%, 0% 100%);
+            position: relative;
+            z-index: 3;
+            margin-bottom: 70px; 
+        }
+
+        /* Passarela Vermelha */
+        .passarela {
+            position: absolute;
+            top: calc(80px + 70px); 
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70px; 
+            bottom: 0;
+            background-color: #d90000;
+            z-index: 1;
+        }
+
+        /* Estrutura de Grid para TODAS as Mesas */
+        .mesas-area {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            
+            /* Largura total para garantir o layout fixo e centralizado */
+            width: 670px; 
+            max-width: 95%; 
+            margin: 0 auto;
+            z-index: 2;
+            padding-top: 0; 
+            padding-bottom: 20px;
+            
+            /* Distância entre os grupos de mesa (Passarela + Espaçamento) */
+            gap: 190px; 
+        }
+        
+        .lado-esquerdo, .lado-direito {
+            display: grid;
+            grid-template-columns: 1fr 1fr; 
+            /* 4 linhas para 16 mesas */
+            grid-template-rows: repeat(4, 1fr); 
+            
+            /* Largura exata para duas mesas de 100px mais um espaçamento de 40px */
+            width: 240px; 
+            
+            /* Espaçamento interno (entre 1A e 2A) */
+            grid-gap: 30px 40px; 
+            
+            position: relative;
+            padding: 0;
+            grid-auto-flow: row; 
+            z-index: 2;
+        }
+
+        /* Estilo da MESA COMPLETA */
+        .mesa-wrap {
+            position: relative;
+            width: 100px; 
+            height: 100px; 
+            border-radius: 50%;
+            background-color: #e59325; 
+            box-shadow: 
+                0 0 0 8px rgba(0, 0, 0, 0.2), 
+                0 0 0 2px #d0821e inset, 
+                0 0 0 4px #d0821e; 
+            border: 1px solid #c07718; 
+            background-image: radial-gradient(circle at center, #f5a83b 0%, #e59325 70%); 
+            
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* Linha divisória entre A e B */
+        .mesa-wrap::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px; 
+            background-color: rgba(0, 0, 0, 0.3);
+            transform: translateX(-50%);
+            z-index: 1;
+        }
+        
+        /* Estilo do assento */
+        .assento {
+            position: absolute;
+            background-color: transparent;
+            color: white;
+            width: 50%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1em; 
+            cursor: pointer; 
+            z-index: 2;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        
+        .assento:hover {
+            opacity: 0.9;
+        }
+
+        /* Gira os textos para replicar o design da imagem */
+        .assento[data-id$="A"] { left: 0; transform: rotate(90deg) translateX(0) translateY(-8px); }
+        .assento[data-id$="B"] { right: 0; transform: rotate(90deg) translateX(0) translateY(8px); }
+
+        /* Estilo para assento indisponível */
+        .assento.indisponivel {
+            color: #ccc;
+            cursor: default; 
+            opacity: 0.7;
+            pointer-events: none; 
+        }
+        
+        /* Estilos da lista */
+        .lista-mesas { 
+            list-style: none; 
+            padding: 0; 
+            max-height: 65vh; 
+            overflow-y: auto; 
+        }
+        .lista-mesas li { 
+            display: flex; 
+            flex-wrap: nowrap; 
+            margin-bottom: 8px; 
+            align-items: center; 
+            border-bottom: 1px dotted #ccc; 
+            padding-bottom: 5px; 
+        }
+        .lista-mesas label { 
+            font-weight: bold; 
+            width: 35px; 
+            text-align: right; 
+            margin-right: 5px; 
+            flex-shrink: 0;
+        }
+        .lista-mesas .status-info {
+            flex-grow: 1;
+            padding-left: 10px;
+            font-size: 0.9em;
+            color: #555;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap; 
+        }
+        .lista-mesas .input-admin {
+            display: none; 
+            flex-grow: 1;
+        }
+        .lista-mesas .input-admin input {
+            flex-grow: 1; 
+            padding: 5px; 
+            border: 1px solid #ccc; 
+            border-radius: 3px; 
+            margin-left: 5px; 
+            min-width: 50px;
+        }
+        .lista-mesas .disponibilidade { 
+            display: inline-block; 
+            width: 15px; 
+            height: 15px; 
+            border-radius: 50%; 
+            margin-left: 10px; 
+            flex-shrink: 0;
+        }
+        .disponivel { background-color: green; }
+        .reservado { background-color: red; }
+        
+        /* Estilo do botão de liberação (SÓ ADM) */
+        .btn-liberar {
+            background-color: #d9534f;
+            color: white;
+            border: none;
+            padding: 5px 8px;
+            margin-left: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8em;
+            flex-shrink: 0;
+            transition: background-color 0.2s;
+        }
+        .btn-liberar:hover {
+            background-color: #c9302c;
+        }
+        .btn-liberar:disabled {
+            background-color: #ccc;
+            cursor: default;
+        }
+        
+        /* Estilos do Login ADM */
+        .admin-login {
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ccc;
+            margin-bottom: 15px;
+        }
+        .admin-login input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            margin-right: 5px;
+        }
+        .admin-login button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Mapa de Mesas da Formatura</h1>
+    </header>
+
+    <div class="container">
+        <div class="mapa-container">
+            <div class="palco">PALCO</div>
+            
+            <div class="passarela"></div> 
+
+            <div class="mesas-area" id="mesas-area">
+                </div>
+        </div>
+
+        <div class="lista-container" id="lista-container">
+            <h2>Mesas (Status)</h2>
+
+            <div class="admin-login">
+                <input type="password" id="admin-password" placeholder="Senha ADM">
+                <button onclick="loginAdmin()">Entrar</button>
+            </div>
+            
+            <div id="loading-message">Carregando dados das reservas...</div>
+            
+            <ul class="lista-mesas" id="lista-mesas-inputs">
+                </ul>
+
+            <div class="admin-controls">
+                <p>Modo Administrador Ativo</p>
+                <button onclick="confirmarLimpezaTotal()" style="background-color: #333; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 3px;">
+                    LIMPAR TODAS AS RESERVAS (Mestre)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mesas totais: 16
+        const NUM_MESAS = 16; 
+        const ADMIN_PASSWORD = "montessori123"; // **** SENHA SECRETA (Altere!) ****
+        const RESERVATION_KEY = 'userReservationId'; 
+        
+        // ** URL DO GOOGLE APPS SCRIPT WEB APP (MANTIDO) **
+        const WEB_APP_ID = "AKfycbwGR0NjXs0WaBihJqhX2BbNXSBAQuWYJ468yPhn-K2sDZ6p_FTmCJA87FrIswzSdv2C"; 
+        const WEB_APP_URL = `https://script.google.com/macros/s/${WEB_APP_ID}/exec`;
+
+        const mapaEsquerdo = document.getElementById('lado-esquerdo');
+        const mapaDireito = document.getElementById('lado-direito');
+        const mesasArea = document.getElementById('mesas-area');
+        const listaInputs = document.getElementById('lista-mesas-inputs');
+        const listaContainer = document.getElementById('lista-container');
+        const loadingMessage = document.getElementById('loading-message');
+
+        let reservas = {}; 
+        let isDataReady = false; 
+
+        // Função utilitária para exibir e esconder o loader
+        function toggleLoading(show) {
+            loadingMessage.style.display = show ? 'block' : 'none';
+            listaInputs.style.display = show ? 'none' : 'block';
+        }
+
+        // Cria a estrutura inicial de 16 mesas
+        function gerarReservasIniciais() {
+            const initialReservas = {};
+            for (let i = 1; i <= NUM_MESAS; i++) {
+                initialReservas[`${i}A`] = { reservado: false, nome: '' };
+                initialReservas[`${i}B`] = { reservado: false, nome: '' };
+            }
+            return initialReservas;
+        }
+
+        // Carrega dados do Web App (GET)
+        async function carregarReservas() {
+            toggleLoading(true);
+            try {
+                // Adicionamos um parâmetro de ação para garantir que o Web App entenda que é uma requisição GET de leitura
+                const response = await fetch(`${WEB_APP_URL}?action=read`, { method: 'GET' });
+                if (!response.ok) {
+                    throw new Error(`Erro de rede: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.reservas && Object.keys(data.reservas).length > 0) {
+                    reservas = data.reservas;
+                } else {
+                    // Se o servidor retornar sucesso, mas sem reservas, inicializa localmente
+                    reservas = gerarReservasIniciais();
+                }
+
+                // Garante que todos os 32 assentos (16 mesas * 2) estão na estrutura
+                const initial = gerarReservasIniciais();
+                reservas = { ...initial, ...reservas };
+                
+                isDataReady = true;
+                toggleLoading(false);
+                return true;
+
+            } catch (error) {
+                console.error("Erro ao carregar reservas do servidor:", error);
+                alert("ERRO CRÍTICO: Não foi possível carregar as reservas do servidor central. O mapa pode estar desatualizado.");
+                
+                // Em caso de falha total de comunicação, inicializa localmente
+                reservas = gerarReservasIniciais(); 
+                isDataReady = true;
+                toggleLoading(false);
+                return false; 
+            }
+        }
+
+        // Salva dados no Web App (POST) - CORRIGIDO
+        async function salvarReservas(successMessage = "Dados salvos com sucesso!") {
+            try {
+                const dataToSend = { 
+                    action: 'write', // Adiciona a ação para o Web App
+                    reservas: reservas 
+                };
+                
+                // Verifica se é uma chamada de limpeza total
+                if (successMessage === 'clear_all') {
+                    dataToSend.reservas = 'clear_all';
+                }
+
+                const response = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    // Importante: Usamos text/plain para evitar problemas de CORS/preflight requests no Apps Script
+                    headers: {
+                        'Content-Type': 'text/plain', 
+                    },
+                    // Enviamos o objeto JSON como uma string pura
+                    body: JSON.stringify(dataToSend)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erro de rede ao salvar: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    // Opcional: alert(successMessage);
+                } else {
+                    throw new Error(result.message || "Erro desconhecido no servidor.");
+                }
+            } catch (error) {
+                console.error("Erro ao salvar reservas:", error);
+                alert(`ERRO CRÍTICO: Não foi possível salvar a reserva no servidor.\nDetalhe: ${error.message}\n(Tente novamente ou contate o ADM)`);
+                return false;
+            }
+            return true;
+        }
+
+        // 2. RENDERIZAÇÃO DO MAPA 
+        function renderizarMapa() {
+            // Limpa o conteúdo existente, se houver
+            const existingEsquerdo = document.getElementById('lado-esquerdo');
+            const existingDireito = document.getElementById('lado-direito');
+            if (existingEsquerdo) existingEsquerdo.remove();
+            if (existingDireito) existingDireito.remove();
+
+            const ladoEsquerdo = document.createElement('div');
+            ladoEsquerdo.className = 'lado-esquerdo';
+            ladoEsquerdo.id = 'lado-esquerdo';
+            
+            const ladoDireito = document.createElement('div');
+            ladoDireito.className = 'lado-direito';
+            ladoDireito.id = 'lado-direito';
+
+            // 8 mesas (4 linhas) para cada lado
+            const mesasEsquerda = [1, 2, 5, 6, 9, 10, 13, 14];
+            const mesasDireita = [3, 4, 7, 8, 11, 12, 15, 16];
+
+            mesasEsquerda.forEach(numMesa => {
+                ladoEsquerdo.appendChild(criarMesaWrap(numMesa));
+            });
+
+            mesasDireita.forEach(numMesa => {
+                ladoDireito.appendChild(criarMesaWrap(numMesa));
+            });
+            
+            mesasArea.appendChild(ladoEsquerdo);
+            mesasArea.appendChild(ladoDireito);
+        }
+
+        function criarMesaWrap(i) {
+             const mesaWrap = document.createElement('div');
+             mesaWrap.className = 'mesa-wrap';
+             mesaWrap.id = `mesa-${i}`; 
+             mesaWrap.title = `Mesa ${i}`;
+             
+             const assentoA = criarAssento(`${i}A`);
+             mesaWrap.appendChild(assentoA);
+
+             const assentoB = criarAssento(`${i}B`);
+             mesaWrap.appendChild(assentoB);
+             
+             return mesaWrap;
+        }
+        
+        function criarAssento(id) {
+            const assento = document.createElement('div');
+            assento.className = 'assento';
+            assento.id = `assento-${id}`;
+            assento.textContent = id; 
+            assento.dataset.id = id;
+
+            const estado = reservas[id] || { reservado: false, nome: '' };
+            
+            if (estado.reservado) {
+                assento.classList.add('indisponivel');
+                assento.title = `Reservado por: ${estado.nome || 'Desconhecido'}`; 
+            } else {
+                assento.addEventListener('click', () => abrirModalSelecao(id));
+            }
+            return assento;
+        }
+
+
+        // 3. RENDERIZAÇÃO DA LISTA DE INPUTS 
+        function renderizarListaInputs() {
+            listaInputs.innerHTML = '';
+
+            const isAdmin = listaContainer.classList.contains('admin-mode');
+
+            for (let i = 1; i <= NUM_MESAS; i++) {
+                listaInputs.appendChild(criarItemLista(`${i}A`, isAdmin));
+                listaInputs.appendChild(criarItemLista(`${i}B`, isAdmin));
+            }
+        }
+
+        function criarItemLista(id, isAdmin) {
+            const li = document.createElement('li');
+            const estado = reservas[id] || { reservado: false, nome: '' };
+            
+            // CONTEÚDO PARA O MODO NÃO-ADM
+            let statusInfoContent = '';
+            if (estado.reservado) {
+                statusInfoContent = `<span class="status-info" id="info-${id}" title="${estado.nome || ''}">Reservado por: <strong>${estado.nome || 'Nome não registrado'}</strong></span>`;
+            } else {
+                statusInfoContent = `<span class="status-info" id="info-${id}">Disponível</span>`;
+            }
+
+            li.innerHTML = `
+                <label for="input-${id}">${id}:</label>
+                <span id="status-${id}" class="disponibilidade ${estado.reservado ? 'reservado' : 'disponivel'}" title="${estado.reservado ? 'Reservado' : 'Disponível'}"></span>
+                
+                ${isAdmin ? 
+                    `
+                    <div class="input-admin">
+                        <input type="text" id="input-${id}" placeholder="Nome do Aluno" value="${estado.nome}" data-id="${id}" />
+                        <button class="btn-liberar" data-id="${id}" onclick="liberarAssento('${id}')" ${estado.reservado ? '' : 'disabled'}>Liberar</button>
+                    </div>
+                    `
+                    :
+                    // MODO PADRÃO (USUÁRIO)
+                    statusInfoContent
+                }
+            `;
+            
+            if (isAdmin) {
+                const input = li.querySelector(`#input-${id}`);
+                
+                // ADM: Permite edição do nome
+                input.addEventListener('input', async (e) => {
+                    const novoNome = e.target.value;
+                    reservas[id].nome = novoNome;
+                    
+                    // Salva a alteração no servidor
+                    await salvarReservas("Nome atualizado com sucesso.");
+
+                    // Atualiza a interface localmente
+                    const assentoMapa = document.getElementById(`assento-${id}`);
+                    if (assentoMapa) {
+                         assentoMapa.title = `Reservado por: ${novoNome || 'Desconhecido'}`;
+                    }
+                    const infoElement = document.getElementById(`info-${id}`);
+                    if(infoElement && reservas[id].reservado) {
+                        infoElement.innerHTML = `Reservado por: <strong>${novoNome || 'Nome não registrado'}</strong>`;
+                        infoElement.title = novoNome || '';
+                    }
+                });
+            }
+
+            return li;
+        }
+        
+        // 4. LÓGICA DE SELEÇÃO E RESERVA (Integrada ao Web App)
+        async function abrirModalSelecao(idDesejado) { 
+            if (!isDataReady) return alert("Aguarde o carregamento inicial dos dados.");
+            
+            const isAdmin = listaContainer.classList.contains('admin-mode');
+            const userReservedId = localStorage.getItem(RESERVATION_KEY);
+
+            // 1. Verifica se já tem uma reserva (somente para não-ADM)
+            if (!isAdmin && userReservedId) {
+                alert(`Atenção: Você já reservou o assento ${userReservedId}. Você não pode reservar outro.`);
+                return;
+            }
+
+            // 2. Verifica se o assento já está ocupado (confirma com os dados do servidor)
+            if (reservas[idDesejado].reservado) {
+                alert(`O assento ${idDesejado} já está reservado por ${reservas[idDesejado].nome}.`);
+                return;
+            }
+            
+            const nomeAluno = prompt(`Confirme a reserva do assento ${idDesejado}.\nDigite seu nome completo:`);
+
+            if (nomeAluno && nomeAluno.trim() !== "") {
+                const nomeLimpa = nomeAluno.trim();
+                
+                // Prepara os dados
+                reservas[idDesejado].reservado = true;
+                reservas[idDesejado].nome = nomeLimpa;
+
+                // ** SALVA NO SERVIDOR **
+                const saved = await salvarReservas(`Assento ${idDesejado} reservado com sucesso para ${nomeLimpa}!`);
+                
+                if (saved) {
+                    // Salva a chave de reserva no navegador do usuário (AQUI A RESTRIÇÃO É ATIVADA)
+                    if (!isAdmin) {
+                        localStorage.setItem(RESERVATION_KEY, idDesejado);
+                    }
+
+                    // 1. Atualiza o mapa localmente
+                    const assentoMapaAntigo = document.getElementById(`assento-${idDesejado}`);
+                    if (assentoMapaAntigo) {
+                        const new_assento = criarAssento(idDesejado); 
+                        assentoMapaAntigo.parentNode.replaceChild(new_assento, assentoMapaAntigo);
+                    }
+                    
+                    // 2. Atualiza os elementos de status na lista localmente
+                    const statusElement = document.getElementById(`status-${idDesejado}`);
+                    if (statusElement) {
+                         statusElement.classList.remove('disponivel');
+                         statusElement.classList.add('reservado');
+                         statusElement.title = 'Reservado';
+                    }
+                    
+                    // Modo ADM: Atualiza input e botão (se o ADM estiver logado)
+                    if (isAdmin) {
+                         const inputElement = document.getElementById(`input-${idDesejado}`);
+                         if (inputElement) { inputElement.value = nomeLimpa; }
+                         const liberarBtn = document.querySelector(`.btn-liberar[data-id="${idDesejado}"]`);
+                         if(liberarBtn) { liberarBtn.disabled = false; }
+                    } 
+                    
+                    // Modo Usuário e ADM: Atualiza o span de informação com o nome
+                    const infoElement = document.getElementById(`info-${idDesejado}`);
+                    if(infoElement) {
+                        infoElement.innerHTML = `Reservado por: <strong>${nomeLimpa}</strong>`;
+                        infoElement.title = nomeLimpa;
+                    }
+                    
+                    // alert(`Assento ${idDesejado} reservado com sucesso para ${nomeLimpa}!\n\nSeu mapa foi atualizado.`);
+
+                } else {
+                    // Reverte os dados se falhar (para manter a consistência local)
+                    reservas[idDesejado].reservado = false;
+                    reservas[idDesejado].nome = '';
+                }
+
+            } else if (nomeAluno !== null) {
+                alert('Nome não fornecido. Reserva cancelada.');
+            }
+        }
+        
+        // 5. FUNÇÕES DE ADM (Liberar - Integrada ao Web App)
+        window.liberarAssento = async function(id) {
+            if (!listaContainer.classList.contains('admin-mode')) {
+                alert('Acesso negado. Apenas o administrador pode liberar assentos.');
+                return;
+            }
+            if (!confirm(`Tem certeza que deseja LIBERAR o assento ${id}? Esta ação não pode ser desfeita.`)) {
+                return;
+            }
+
+            // Prepara os dados para liberar
+            reservas[id].reservado = false;
+            reservas[id].nome = '';
+
+            // ** SALVA NO SERVIDOR **
+            const saved = await salvarReservas(`Assento ${id} liberado com sucesso.`);
+            
+            if (saved) {
+                // Remove o registro de reserva do localStorage do ADM (se for o ADM que a tinha feito)
+                if (localStorage.getItem(RESERVATION_KEY) === id) {
+                    localStorage.removeItem(RESERVATION_KEY);
+                }
+
+                // 1. Atualiza o mapa localmente
+                const assentoMapaAntigo = document.getElementById(`assento-${id}`);
+                if (assentoMapaAntigo) {
+                    const new_assento = criarAssento(id); 
+                    assentoMapaAntigo.parentNode.replaceChild(new_assento, assentoMapaAntigo);
+                }
+
+                // 2. Atualiza a lista ADM
+                const inputElement = document.getElementById(`input-${id}`);
+                if (inputElement) { inputElement.value = ''; }
+                
+                const liberarBtn = document.querySelector(`.btn-liberar[data-id="${id}"]`);
+                if(liberarBtn) { liberarBtn.disabled = true; }
+                
+                // 3. Atualiza o status para todos os modos
+                const statusElement = document.getElementById(`status-${id}`);
+                if (statusElement) {
+                     statusElement.classList.remove('reservado');
+                     statusElement.classList.add('disponivel');
+                     statusElement.title = 'Disponível';
+                }
+                
+                const infoElement = document.getElementById(`info-${id}`);
+                if(infoElement) {
+                    infoElement.innerHTML = `Disponível`;
+                    infoElement.title = '';
+                }
+            }
+        }
+        
+        // ADM: Limpeza Total (Integrada ao Web App)
+        window.confirmarLimpezaTotal = async function() {
+            if (!listaContainer.classList.contains('admin-mode')) {
+                alert('Acesso negado. Apenas o administrador pode limpar todas as reservas.');
+                return;
+            }
+            if (confirm("ATENÇÃO: Você está prestes a LIMPAR TODAS as reservas feitas NO SERVIDOR CENTRAL. Esta ação é irreversível.\n\nConfirme para continuar a exclusão total.")) {
+                
+                // Reinicia a estrutura localmente
+                reservas = gerarReservasIniciais();
+                
+                // ** SALVA NO SERVIDOR (limpando o banco de dados) **
+                const saved = await salvarReservas("clear_all");
+
+                if (saved) {
+                     localStorage.removeItem(RESERVATION_KEY); 
+                     renderizarMapa();
+                     renderizarListaInputs();
+                     alert('Todas as reservas foram removidas e o mapa foi resetado.');
+                }
+            }
+        }
+        
+        // 6. LÓGICA DE LOGIN ADM (Mantida)
+        window.loginAdmin = function() {
+            const passwordInput = document.getElementById('admin-password');
+            if (passwordInput.value === ADMIN_PASSWORD) {
+                listaContainer.classList.add('admin-mode');
+                renderizarListaInputs(); 
+                alert('Login de Administrador realizado com sucesso!');
+                passwordInput.parentNode.style.display = 'none';
+            } else {
+                alert('Senha incorreta. Acesso negado.');
+                passwordInput.value = '';
+            }
+        }
+        
+        // 7. INICIALIZAÇÃO 
+        async function iniciarSistema() {
+            const loaded = await carregarReservas();
+            if (loaded) {
+                renderizarMapa();
+                renderizarListaInputs();
+            } else {
+                renderizarMapa();
+                renderizarListaInputs();
+            }
+        }
+
+        window.onload = iniciarSistema;
+    </script>
+</body>
+</html>
